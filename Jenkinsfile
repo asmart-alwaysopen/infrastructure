@@ -8,7 +8,7 @@ pipeline {
 
   parameters {
     choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Terraform environment value (TF_VAR_environment).')
-    choice(name: 'ACTION', choices: ['plan', 'apply'], description: 'Run plan only, or plan + apply.')
+    choice(name: 'ACTION', choices: ['plan', 'apply', 'destroy'], description: 'Run plan, plan + apply, or destroy.')
     string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region used by Terraform (TF_VAR_aws_region).')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-jenkins', description: 'Jenkins AWS credentials ID for Terraform.')
   }
@@ -22,6 +22,8 @@ pipeline {
     TF_DIR           = 'terraform'
     PLAN_FILE        = 'tfplan.binary'
     PLAN_TEXT_FILE   = 'tfplan.txt'
+    DESTROY_PLAN_FILE = 'tfdestroy.binary'
+    DESTROY_TEXT_FILE = 'tfdestroy.txt'
   }
 
   stages {
@@ -63,7 +65,9 @@ pipeline {
           sh '''
             set -euo pipefail
             : "${TF_DIR:=terraform}"
-            terraform -chdir="${TF_DIR}" init -reconfigure
+            terraform -chdir="${TF_DIR}" init -reconfigure \
+              -backend-config="region=${AWS_REGION}" \
+              -backend-config="key=infrastructure/${ENVIRONMENT}/${AWS_REGION}/terraform.tfstate"
           '''
         }
       }
@@ -88,6 +92,9 @@ pipeline {
     }
 
     stage('Terraform Plan') {
+      when {
+        expression { params.ACTION == 'plan' || params.ACTION == 'apply' }
+      }
       steps {
         withCredentials([[
           $class: 'AmazonWebServicesCredentialsBinding',
@@ -125,11 +132,66 @@ pipeline {
         }
       }
     }
+
+    stage('Destroy Safety Check') {
+      when {
+        expression { params.ACTION == 'destroy' }
+      }
+      steps {
+        script {
+          if (params.ENVIRONMENT == 'production' || params.ENVIRONMENT == 'prod') {
+            error("Destroy is blocked for production environments. ENVIRONMENT='${params.ENVIRONMENT}'.")
+          }
+        }
+      }
+    }
+
+    stage('Terraform Destroy Plan') {
+      when {
+        expression { params.ACTION == 'destroy' }
+      }
+      steps {
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: params.AWS_CREDENTIALS_ID,
+          accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+          secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+          sh '''
+            set -euo pipefail
+            : "${TF_DIR:=terraform}"
+            terraform -chdir="${TF_DIR}" plan -destroy -out="${DESTROY_PLAN_FILE}"
+            terraform -chdir="${TF_DIR}" show "${DESTROY_PLAN_FILE}" > "${DESTROY_TEXT_FILE}"
+          '''
+        }
+      }
+    }
+
+    stage('Terraform Destroy') {
+      when {
+        expression { params.ACTION == 'destroy' }
+      }
+      steps {
+        input message: "Destroy Terraform resources for '${params.ENVIRONMENT}' in '${params.AWS_REGION}'?"
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: params.AWS_CREDENTIALS_ID,
+          accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+          secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+          sh '''
+            set -euo pipefail
+            : "${TF_DIR:=terraform}"
+            terraform -chdir="${TF_DIR}" apply -auto-approve "${DESTROY_PLAN_FILE}"
+          '''
+        }
+      }
+    }
   }
 
   post {
     always {
-      archiveArtifacts artifacts: "${env.TF_DIR ?: 'terraform'}/tfplan.*", allowEmptyArchive: true
+      archiveArtifacts artifacts: "${env.TF_DIR ?: 'terraform'}/tfplan.*,${env.TF_DIR ?: 'terraform'}/tfdestroy.*", allowEmptyArchive: true
     }
   }
 }

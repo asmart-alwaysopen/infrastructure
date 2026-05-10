@@ -47,11 +47,12 @@ Pipeline parameters:
 - `ENVIRONMENT`: sets `TF_VAR_environment` (`dev`, `staging`, `production`)
 - `AWS_REGION`: sets `TF_VAR_aws_region`
 - `AWS_CREDENTIALS_ID`: Jenkins credentials ID used for AWS access keys
-- `ACTION`: `plan` or `apply`
+- `ACTION`: `plan`, `apply`, or `destroy` (`destroy` is blocked for production)
 
 The pipeline runs:
 1. `terraform init -reconfigure`
+   - configures S3 backend in `always-open-terraform-state` with key `infrastructure/<environment>/<region>/terraform.tfstate`
 2. `terraform fmt -check -recursive`
 3. `terraform validate`
-4. `terraform plan` (archives plan files)
-5. optional gated `terraform apply`
+4. `terraform plan` (for `plan`/`apply`) or `terraform plan -destroy` (for `destroy`)
+5. optional gated `terraform apply` or gated `terraform destroy`
