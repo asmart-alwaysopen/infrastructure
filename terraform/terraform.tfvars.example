@@ -1,0 +1,36 @@
+aws_region   = "us-west-2"
+environment  = "production"
+project_name = "always-open"
+cluster_name = "always-open-eks-prod"
+
+# EKS target version.
+kubernetes_version = "1.35"
+
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-west-2a", "us-west-2b", "us-west-2c"]
+private_subnets    = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnets     = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+enable_single_nat_gateway = true
+
+managed_node_group_defaults = {
+  ami_type       = "AL2023_x86_64_STANDARD"
+  instance_types = ["m6i.large"]
+  capacity_type  = "ON_DEMAND"
+  disk_size      = 50
+  min_size       = 2
+  max_size       = 6
+  desired_size   = 3
+}
+
+managed_node_groups = {
+  general = {
+    labels = {
+      workload = "general"
+    }
+  }
+}
+
+extra_tags = {
+  Owner = "platform"
+}
