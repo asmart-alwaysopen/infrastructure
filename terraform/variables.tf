@@ -95,7 +95,7 @@ variable "managed_node_groups" {
       key    = string
       value  = string
       effect = string
-    })))
+    })), [])
   }))
   default = {
     general = {
