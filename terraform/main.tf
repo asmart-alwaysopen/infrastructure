@@ -9,6 +9,27 @@ locals {
     },
     var.extra_tags
   )
+
+  # Ensure each managed node group has concrete scaling values so the EKS module
+  # never receives null for required scaling_config attributes.
+  resolved_managed_node_groups = {
+    for name, ng in var.managed_node_groups : name => merge(
+      {
+        ami_type       = var.managed_node_group_defaults.ami_type
+        instance_types = var.managed_node_group_defaults.instance_types
+        capacity_type  = var.managed_node_group_defaults.capacity_type
+        disk_size      = var.managed_node_group_defaults.disk_size
+        min_size       = var.managed_node_group_defaults.min_size
+        max_size       = var.managed_node_group_defaults.max_size
+        desired_size   = var.managed_node_group_defaults.desired_size
+        taints         = []
+      },
+      ng,
+      {
+        taints = try(ng.taints, [])
+      }
+    )
+  }
 }
 
 module "vpc" {
@@ -74,7 +95,7 @@ module "eks" {
     desired_size   = var.managed_node_group_defaults.desired_size
   }
 
-  eks_managed_node_groups = var.managed_node_groups
+  eks_managed_node_groups = local.resolved_managed_node_groups
 
   tags = local.common_tags
 }
