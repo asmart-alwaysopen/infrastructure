@@ -48,6 +48,7 @@ Pipeline parameters:
 - `AWS_REGION`: sets `TF_VAR_aws_region`
 - `AWS_CREDENTIALS_ID`: Jenkins credentials ID used for AWS access keys
 - `ACTION`: `plan`, `apply`, or `destroy` (`destroy` is blocked for production)
+- `REQUIRE_MANUAL_APPROVAL`: when enabled, Jenkins pauses before `apply`/`destroy`
 
 The pipeline runs:
 1. `terraform init -reconfigure`

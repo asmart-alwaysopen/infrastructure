@@ -11,6 +11,7 @@ pipeline {
     choice(name: 'ACTION', choices: ['plan', 'apply', 'destroy'], description: 'Run plan, plan + apply, or destroy.')
     string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region used by Terraform (TF_VAR_aws_region).')
     string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-jenkins', description: 'Jenkins AWS credentials ID for Terraform.')
+    booleanParam(name: 'REQUIRE_MANUAL_APPROVAL', defaultValue: false, description: 'When true, pause for manual confirmation before apply/destroy.')
   }
 
   environment {
@@ -117,7 +118,11 @@ pipeline {
         expression { params.ACTION == 'apply' }
       }
       steps {
-        input message: "Apply Terraform changes for '${params.ENVIRONMENT}'?"
+        script {
+          if (params.REQUIRE_MANUAL_APPROVAL) {
+            input message: "Apply Terraform changes for '${params.ENVIRONMENT}'?"
+          }
+        }
         withCredentials([[
           $class: 'AmazonWebServicesCredentialsBinding',
           credentialsId: params.AWS_CREDENTIALS_ID,
@@ -172,7 +177,11 @@ pipeline {
         expression { params.ACTION == 'destroy' }
       }
       steps {
-        input message: "Destroy Terraform resources for '${params.ENVIRONMENT}' in '${params.AWS_REGION}'?"
+        script {
+          if (params.REQUIRE_MANUAL_APPROVAL) {
+            input message: "Destroy Terraform resources for '${params.ENVIRONMENT}' in '${params.AWS_REGION}'?"
+          }
+        }
         withCredentials([[
           $class: 'AmazonWebServicesCredentialsBinding',
           credentialsId: params.AWS_CREDENTIALS_ID,
