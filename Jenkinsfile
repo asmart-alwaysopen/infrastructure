@@ -19,7 +19,7 @@ pipeline {
     TF_CLI_ARGS      = '-no-color'
     TF_VAR_environment = "${params.ENVIRONMENT}"
     TF_VAR_aws_region  = "${params.AWS_REGION}"
-    TF_DIR           = 'infrastructure/terraform'
+    TF_DIR           = ''
     PLAN_FILE        = 'tfplan.binary'
     PLAN_TEXT_FILE   = 'tfplan.txt'
   }
@@ -28,6 +28,21 @@ pipeline {
     stage('Checkout') {
       steps {
         checkout scm
+      }
+    }
+
+    stage('Resolve Terraform Directory') {
+      steps {
+        script {
+          if (fileExists('infrastructure/terraform/main.tf')) {
+            env.TF_DIR = 'infrastructure/terraform'
+          } else if (fileExists('terraform/main.tf')) {
+            env.TF_DIR = 'terraform'
+          } else {
+            error('Could not find terraform directory. Expected infrastructure/terraform or terraform in workspace.')
+          }
+          echo "Using Terraform directory: ${env.TF_DIR}"
+        }
       }
     }
 
@@ -110,7 +125,7 @@ pipeline {
 
   post {
     always {
-      archiveArtifacts artifacts: 'infrastructure/terraform/tfplan.*', allowEmptyArchive: true
+      archiveArtifacts artifacts: "${env.TF_DIR}/tfplan.*", allowEmptyArchive: true
     }
   }
 }
