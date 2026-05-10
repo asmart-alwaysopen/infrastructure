@@ -13,22 +13,17 @@ locals {
   # Ensure each managed node group has concrete scaling values so the EKS module
   # never receives null for required scaling_config attributes.
   resolved_managed_node_groups = {
-    for name, ng in var.managed_node_groups : name => merge(
-      {
-        ami_type       = var.managed_node_group_defaults.ami_type
-        instance_types = var.managed_node_group_defaults.instance_types
-        capacity_type  = var.managed_node_group_defaults.capacity_type
-        disk_size      = var.managed_node_group_defaults.disk_size
-        min_size       = var.managed_node_group_defaults.min_size
-        max_size       = var.managed_node_group_defaults.max_size
-        desired_size   = var.managed_node_group_defaults.desired_size
-        taints         = []
-      },
-      ng,
-      {
-        taints = try(ng.taints, [])
-      }
-    )
+    for name, ng in var.managed_node_groups : name => {
+      ami_type       = coalesce(try(ng.ami_type, null), var.managed_node_group_defaults.ami_type)
+      instance_types = coalesce(try(ng.instance_types, null), var.managed_node_group_defaults.instance_types)
+      capacity_type  = coalesce(try(ng.capacity_type, null), var.managed_node_group_defaults.capacity_type)
+      disk_size      = coalesce(try(ng.disk_size, null), var.managed_node_group_defaults.disk_size)
+      min_size       = coalesce(try(ng.min_size, null), var.managed_node_group_defaults.min_size)
+      max_size       = coalesce(try(ng.max_size, null), var.managed_node_group_defaults.max_size)
+      desired_size   = coalesce(try(ng.desired_size, null), var.managed_node_group_defaults.desired_size)
+      labels         = coalesce(try(ng.labels, null), {})
+      taints         = coalesce(try(ng.taints, null), [])
+    }
   }
 }
 
