@@ -19,7 +19,7 @@ pipeline {
     TF_CLI_ARGS      = '-no-color'
     TF_VAR_environment = "${params.ENVIRONMENT}"
     TF_VAR_aws_region  = "${params.AWS_REGION}"
-    TF_DIR           = ''
+    TF_DIR           = 'terraform'
     PLAN_FILE        = 'tfplan.binary'
     PLAN_TEXT_FILE   = 'tfplan.txt'
   }
@@ -62,6 +62,7 @@ pipeline {
         ]]) {
           sh '''
             set -euo pipefail
+            : "${TF_DIR:=terraform}"
             terraform -chdir="${TF_DIR}" init -reconfigure
           '''
         }
@@ -78,6 +79,7 @@ pipeline {
         ]]) {
           sh '''
             set -euo pipefail
+            : "${TF_DIR:=terraform}"
             terraform -chdir="${TF_DIR}" fmt -check -recursive
             terraform -chdir="${TF_DIR}" validate
           '''
@@ -95,6 +97,7 @@ pipeline {
         ]]) {
           sh '''
             set -euo pipefail
+            : "${TF_DIR:=terraform}"
             terraform -chdir="${TF_DIR}" plan -out="${PLAN_FILE}"
             terraform -chdir="${TF_DIR}" show "${PLAN_FILE}" > "${PLAN_TEXT_FILE}"
           '''
@@ -116,6 +119,7 @@ pipeline {
         ]]) {
           sh '''
             set -euo pipefail
+            : "${TF_DIR:=terraform}"
             terraform -chdir="${TF_DIR}" apply -auto-approve "${PLAN_FILE}"
           '''
         }
@@ -125,7 +129,7 @@ pipeline {
 
   post {
     always {
-      archiveArtifacts artifacts: "${env.TF_DIR}/tfplan.*", allowEmptyArchive: true
+      archiveArtifacts artifacts: "${env.TF_DIR ?: 'terraform'}/tfplan.*", allowEmptyArchive: true
     }
   }
 }
