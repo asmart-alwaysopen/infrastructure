@@ -9,8 +9,8 @@ pipeline {
   parameters {
     choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Terraform environment value (TF_VAR_environment).')
     choice(name: 'ACTION', choices: ['plan', 'apply'], description: 'Run plan only, or plan + apply.')
-    string(name: 'AWS_REGION', defaultValue: 'us-west-2', description: 'AWS region used by Terraform (TF_VAR_aws_region).')
-    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-terraform', description: 'Jenkins AWS credentials ID for Terraform.')
+    string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region used by Terraform (TF_VAR_aws_region).')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-jenkins', description: 'Jenkins AWS credentials ID for Terraform.')
   }
 
   environment {
