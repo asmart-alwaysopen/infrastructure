@@ -1,0 +1,221 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    choice(name: 'ACTION', choices: ['plan', 'apply', 'destroy'], description: 'Validate, deploy, or destroy support infrastructure.')
+    choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'production'], description: 'Environment identifier used for safety checks.')
+    string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region for the EKS cluster.')
+    string(name: 'CLUSTER_NAME', defaultValue: 'always-open-eks', description: 'Target EKS cluster name.')
+    string(name: 'AWS_CREDENTIALS_ID', defaultValue: 'aws-jenkins', description: 'Jenkins AWS credentials ID.')
+    string(name: 'NAMESPACE_INFRA', defaultValue: 'always-open-infra', description: 'Namespace for shared infra dependencies (mongodb/rabbitmq/qdrant).')
+    string(name: 'NAMESPACE_APP', defaultValue: 'always-open', description: 'Namespace for app mesh config and app-facing Istio resources.')
+    string(name: 'NAMESPACE_ISTIO', defaultValue: 'istio-system', description: 'Namespace for Istio control plane and ingress.')
+    string(name: 'ISTIO_VERSION', defaultValue: '1.20.0', description: 'Istio Helm chart version.')
+    string(name: 'DOMAIN_NAME', defaultValue: 'bealwaysopen.com', description: 'Domain used by always-open-istio chart.')
+    booleanParam(name: 'REQUIRE_MANUAL_APPROVAL', defaultValue: false, description: 'When true, require approval before apply/destroy.')
+  }
+
+  environment {
+    DEPLOYMENT_DIR = ''
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Resolve Paths') {
+      steps {
+        script {
+          if (fileExists('deployment/helm/mongodb/Chart.yaml')) {
+            env.DEPLOYMENT_DIR = 'deployment'
+          } else if (fileExists('../deployment/helm/mongodb/Chart.yaml')) {
+            env.DEPLOYMENT_DIR = '../deployment'
+          } else {
+            error('Could not find deployment directory. Expected deployment/helm/mongodb/Chart.yaml in workspace.')
+          }
+          echo "Using deployment directory: ${env.DEPLOYMENT_DIR}"
+        }
+      }
+    }
+
+    stage('Safety Check') {
+      when {
+        expression { params.ACTION == 'destroy' }
+      }
+      steps {
+        script {
+          if (params.ENVIRONMENT == 'production' || params.ENVIRONMENT == 'prod') {
+            error("Destroy is blocked for production environments. ENVIRONMENT='${params.ENVIRONMENT}'.")
+          }
+        }
+      }
+    }
+
+    stage('Configure Cluster Access') {
+      steps {
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: params.AWS_CREDENTIALS_ID,
+          accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+          secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+          sh '''
+            set -euo pipefail
+            aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
+            kubectl cluster-info
+          '''
+        }
+      }
+    }
+
+    stage('Prepare Helm Repos') {
+      steps {
+        sh '''
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
+          helm repo add qdrant https://qdrant.github.io/qdrant-helm/ >/dev/null 2>&1 || true
+          helm repo add istio https://istio-release.storage.googleapis.com/charts >/dev/null 2>&1 || true
+          helm repo update
+        '''
+      }
+    }
+
+    stage('Plan (Validation)') {
+      when {
+        expression { params.ACTION == 'plan' }
+      }
+      steps {
+        sh '''
+          set -euo pipefail
+
+          helm dependency build "${DEPLOYMENT_DIR}/helm/mongodb"
+          helm dependency build "${DEPLOYMENT_DIR}/helm/rabbitmq"
+          helm dependency build "${DEPLOYMENT_DIR}/helm/qdrant"
+
+          helm lint "${DEPLOYMENT_DIR}/helm/mongodb" --values "${DEPLOYMENT_DIR}/helm/mongodb/values.yaml"
+          helm lint "${DEPLOYMENT_DIR}/helm/rabbitmq" --values "${DEPLOYMENT_DIR}/helm/rabbitmq/values.yaml"
+          helm lint "${DEPLOYMENT_DIR}/helm/qdrant" --values "${DEPLOYMENT_DIR}/helm/qdrant/values.yaml"
+          helm lint "${DEPLOYMENT_DIR}/helm/always-open-istio" --values "${DEPLOYMENT_DIR}/helm/always-open-istio/values.yaml"
+
+          helm template mongodb "${DEPLOYMENT_DIR}/helm/mongodb" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${DEPLOYMENT_DIR}/helm/mongodb/values.yaml" >/dev/null
+
+          helm template rabbitmq "${DEPLOYMENT_DIR}/helm/rabbitmq" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${DEPLOYMENT_DIR}/helm/rabbitmq/values.yaml" >/dev/null
+
+          helm template qdrant "${DEPLOYMENT_DIR}/helm/qdrant" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${DEPLOYMENT_DIR}/helm/qdrant/values.yaml" >/dev/null
+
+          helm template always-open-istio "${DEPLOYMENT_DIR}/helm/always-open-istio" \
+            --namespace "${NAMESPACE_APP}" \
+            --set "domain=${DOMAIN_NAME}" >/dev/null
+        '''
+      }
+    }
+
+    stage('Apply Support Infra') {
+      when {
+        expression { params.ACTION == 'apply' }
+      }
+      steps {
+        script {
+          if (params.REQUIRE_MANUAL_APPROVAL) {
+            input message: "Deploy support infrastructure to '${params.ENVIRONMENT}' (${params.CLUSTER_NAME})?"
+          }
+        }
+        sh '''
+          set -euo pipefail
+
+          kubectl create namespace "${NAMESPACE_INFRA}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace "${NAMESPACE_APP}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace "${NAMESPACE_ISTIO}" --dry-run=client -o yaml | kubectl apply -f -
+
+          helm dependency build "${DEPLOYMENT_DIR}/helm/mongodb"
+          helm dependency build "${DEPLOYMENT_DIR}/helm/rabbitmq"
+          helm dependency build "${DEPLOYMENT_DIR}/helm/qdrant"
+
+          helm upgrade --install mongodb "${DEPLOYMENT_DIR}/helm/mongodb" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${DEPLOYMENT_DIR}/helm/mongodb/values.yaml" \
+            --wait
+
+          helm upgrade --install rabbitmq "${DEPLOYMENT_DIR}/helm/rabbitmq" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${DEPLOYMENT_DIR}/helm/rabbitmq/values.yaml" \
+            --wait
+
+          helm upgrade --install qdrant "${DEPLOYMENT_DIR}/helm/qdrant" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${DEPLOYMENT_DIR}/helm/qdrant/values.yaml" \
+            --wait
+
+          helm upgrade --install istio-base istio/base \
+            --namespace "${NAMESPACE_ISTIO}" \
+            --version "${ISTIO_VERSION}" \
+            --wait
+
+          helm upgrade --install istiod istio/istiod \
+            --namespace "${NAMESPACE_ISTIO}" \
+            --version "${ISTIO_VERSION}" \
+            --set global.proxy.resources.requests.cpu=50m \
+            --wait
+
+          helm upgrade --install istio-ingress istio/gateway \
+            --namespace "${NAMESPACE_ISTIO}" \
+            --version "${ISTIO_VERSION}" \
+            --set service.type=LoadBalancer \
+            --wait
+
+          kubectl label namespace "${NAMESPACE_APP}" istio-injection=enabled --overwrite
+
+          helm upgrade --install always-open-istio "${DEPLOYMENT_DIR}/helm/always-open-istio" \
+            --namespace "${NAMESPACE_APP}" \
+            --set "domain=${DOMAIN_NAME}" \
+            --wait
+
+          if [ -d "${DEPLOYMENT_DIR}/istio-manifests" ]; then
+            kubectl apply -f "${DEPLOYMENT_DIR}/istio-manifests/" || true
+          fi
+
+          kubectl wait --for=condition=available deployment/istiod -n "${NAMESPACE_ISTIO}" --timeout=300s
+        '''
+      }
+    }
+
+    stage('Destroy Support Infra') {
+      when {
+        expression { params.ACTION == 'destroy' }
+      }
+      steps {
+        script {
+          if (params.REQUIRE_MANUAL_APPROVAL) {
+            input message: "Destroy support infrastructure for '${params.ENVIRONMENT}' (${params.CLUSTER_NAME})?"
+          }
+        }
+        sh '''
+          set -euo pipefail
+
+          helm uninstall always-open-istio --namespace "${NAMESPACE_APP}" || true
+          helm uninstall istio-ingress --namespace "${NAMESPACE_ISTIO}" || true
+          helm uninstall istiod --namespace "${NAMESPACE_ISTIO}" || true
+          helm uninstall istio-base --namespace "${NAMESPACE_ISTIO}" || true
+
+          helm uninstall qdrant --namespace "${NAMESPACE_INFRA}" || true
+          helm uninstall rabbitmq --namespace "${NAMESPACE_INFRA}" || true
+          helm uninstall mongodb --namespace "${NAMESPACE_INFRA}" || true
+        '''
+      }
+    }
+  }
+}
