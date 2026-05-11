@@ -37,7 +37,18 @@ service:
   type: ClusterIP
   port: 27017
 
-podSecurityContext: {}
+# Official image runs as non-root (mongodb user / typically 999:999). Persistent volumes
+# from the cloud provider are often root-owned; fsGroup lets kubelet grant write access.
+# If you reused a Bitnami PVC (uid 1001), enable volumePermissions once to chown data.
+podSecurityContext:
+  fsGroup: 999
+  fsGroupChangePolicy: OnRootMismatch
 
 containerSecurityContext:
   allowPrivilegeEscalation: false
+
+volumePermissions:
+  enabled: false
+  image: busybox:1.36
+  uid: 999
+  gid: 999
