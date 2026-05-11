@@ -152,74 +152,83 @@ pipeline {
             input message: "Deploy support infrastructure to '${params.ENVIRONMENT}' (${params.CLUSTER_NAME})?"
           }
         }
-        sh '''
-          set -euo pipefail
-          : "${CHARTS_DIR:=infrastructure/support/charts}"
-          : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: params.AWS_CREDENTIALS_ID,
+          accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+          secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+          sh '''
+            set -euo pipefail
+            : "${CHARTS_DIR:=infrastructure/support/charts}"
+            : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
 
-          if [ ! -d "${CHARTS_DIR}" ]; then
-            if [ -d "support/charts" ]; then
-              CHARTS_DIR="support/charts"
-              MANIFESTS_DIR="support/manifests/istio"
-            else
-              echo "Support charts directory not found: ${CHARTS_DIR}" >&2
-              exit 1
+            if [ ! -d "${CHARTS_DIR}" ]; then
+              if [ -d "support/charts" ]; then
+                CHARTS_DIR="support/charts"
+                MANIFESTS_DIR="support/manifests/istio"
+              else
+                echo "Support charts directory not found: ${CHARTS_DIR}" >&2
+                exit 1
+              fi
             fi
-          fi
 
-          kubectl create namespace "${NAMESPACE_INFRA}" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create namespace "${NAMESPACE_APP}" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create namespace "${NAMESPACE_ISTIO}" --dry-run=client -o yaml | kubectl apply -f -
+            aws sts get-caller-identity >/dev/null
 
-          helm dependency build "${CHARTS_DIR}/mongodb"
-          helm dependency build "${CHARTS_DIR}/rabbitmq"
-          helm dependency build "${CHARTS_DIR}/qdrant"
+            kubectl create namespace "${NAMESPACE_INFRA}" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl create namespace "${NAMESPACE_APP}" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl create namespace "${NAMESPACE_ISTIO}" --dry-run=client -o yaml | kubectl apply -f -
 
-          helm upgrade --install mongodb "${CHARTS_DIR}/mongodb" \
-            --namespace "${NAMESPACE_INFRA}" \
-            --values "${CHARTS_DIR}/mongodb/values.yaml" \
-            --wait
+            helm dependency build "${CHARTS_DIR}/mongodb"
+            helm dependency build "${CHARTS_DIR}/rabbitmq"
+            helm dependency build "${CHARTS_DIR}/qdrant"
 
-          helm upgrade --install rabbitmq "${CHARTS_DIR}/rabbitmq" \
-            --namespace "${NAMESPACE_INFRA}" \
-            --values "${CHARTS_DIR}/rabbitmq/values.yaml" \
-            --wait
+            helm upgrade --install mongodb "${CHARTS_DIR}/mongodb" \
+              --namespace "${NAMESPACE_INFRA}" \
+              --values "${CHARTS_DIR}/mongodb/values.yaml" \
+              --wait
 
-          helm upgrade --install qdrant "${CHARTS_DIR}/qdrant" \
-            --namespace "${NAMESPACE_INFRA}" \
-            --values "${CHARTS_DIR}/qdrant/values.yaml" \
-            --wait
+            helm upgrade --install rabbitmq "${CHARTS_DIR}/rabbitmq" \
+              --namespace "${NAMESPACE_INFRA}" \
+              --values "${CHARTS_DIR}/rabbitmq/values.yaml" \
+              --wait
 
-          helm upgrade --install istio-base istio/base \
-            --namespace "${NAMESPACE_ISTIO}" \
-            --version "${ISTIO_VERSION}" \
-            --wait
+            helm upgrade --install qdrant "${CHARTS_DIR}/qdrant" \
+              --namespace "${NAMESPACE_INFRA}" \
+              --values "${CHARTS_DIR}/qdrant/values.yaml" \
+              --wait
 
-          helm upgrade --install istiod istio/istiod \
-            --namespace "${NAMESPACE_ISTIO}" \
-            --version "${ISTIO_VERSION}" \
-            --set global.proxy.resources.requests.cpu=50m \
-            --wait
+            helm upgrade --install istio-base istio/base \
+              --namespace "${NAMESPACE_ISTIO}" \
+              --version "${ISTIO_VERSION}" \
+              --wait
 
-          helm upgrade --install istio-ingress istio/gateway \
-            --namespace "${NAMESPACE_ISTIO}" \
-            --version "${ISTIO_VERSION}" \
-            --set service.type=LoadBalancer \
-            --wait
+            helm upgrade --install istiod istio/istiod \
+              --namespace "${NAMESPACE_ISTIO}" \
+              --version "${ISTIO_VERSION}" \
+              --set global.proxy.resources.requests.cpu=50m \
+              --wait
 
-          kubectl label namespace "${NAMESPACE_APP}" istio-injection=enabled --overwrite
+            helm upgrade --install istio-ingress istio/gateway \
+              --namespace "${NAMESPACE_ISTIO}" \
+              --version "${ISTIO_VERSION}" \
+              --set service.type=LoadBalancer \
+              --wait
 
-          helm upgrade --install always-open-istio "${CHARTS_DIR}/always-open-istio" \
-            --namespace "${NAMESPACE_APP}" \
-            --set "domain=${DOMAIN_NAME}" \
-            --wait
+            kubectl label namespace "${NAMESPACE_APP}" istio-injection=enabled --overwrite
 
-          if [ -d "${MANIFESTS_DIR}" ]; then
-            kubectl apply -f "${MANIFESTS_DIR}/" || true
-          fi
+            helm upgrade --install always-open-istio "${CHARTS_DIR}/always-open-istio" \
+              --namespace "${NAMESPACE_APP}" \
+              --set "domain=${DOMAIN_NAME}" \
+              --wait
 
-          kubectl wait --for=condition=available deployment/istiod -n "${NAMESPACE_ISTIO}" --timeout=300s
-        '''
+            if [ -d "${MANIFESTS_DIR}" ]; then
+              kubectl apply -f "${MANIFESTS_DIR}/" || true
+            fi
+
+            kubectl wait --for=condition=available deployment/istiod -n "${NAMESPACE_ISTIO}" --timeout=300s
+          '''
+        }
       }
     }
 
@@ -233,20 +242,29 @@ pipeline {
             input message: "Destroy support infrastructure for '${params.ENVIRONMENT}' (${params.CLUSTER_NAME})?"
           }
         }
-        sh '''
-          set -euo pipefail
-          : "${CHARTS_DIR:=infrastructure/support/charts}"
-          : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
+        withCredentials([[
+          $class: 'AmazonWebServicesCredentialsBinding',
+          credentialsId: params.AWS_CREDENTIALS_ID,
+          accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+          secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+          sh '''
+            set -euo pipefail
+            : "${CHARTS_DIR:=infrastructure/support/charts}"
+            : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
 
-          helm uninstall always-open-istio --namespace "${NAMESPACE_APP}" || true
-          helm uninstall istio-ingress --namespace "${NAMESPACE_ISTIO}" || true
-          helm uninstall istiod --namespace "${NAMESPACE_ISTIO}" || true
-          helm uninstall istio-base --namespace "${NAMESPACE_ISTIO}" || true
+            aws sts get-caller-identity >/dev/null
 
-          helm uninstall qdrant --namespace "${NAMESPACE_INFRA}" || true
-          helm uninstall rabbitmq --namespace "${NAMESPACE_INFRA}" || true
-          helm uninstall mongodb --namespace "${NAMESPACE_INFRA}" || true
-        '''
+            helm uninstall always-open-istio --namespace "${NAMESPACE_APP}" || true
+            helm uninstall istio-ingress --namespace "${NAMESPACE_ISTIO}" || true
+            helm uninstall istiod --namespace "${NAMESPACE_ISTIO}" || true
+            helm uninstall istio-base --namespace "${NAMESPACE_ISTIO}" || true
+
+            helm uninstall qdrant --namespace "${NAMESPACE_INFRA}" || true
+            helm uninstall rabbitmq --namespace "${NAMESPACE_INFRA}" || true
+            helm uninstall mongodb --namespace "${NAMESPACE_INFRA}" || true
+          '''
+        }
       }
     }
   }
