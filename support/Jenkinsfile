@@ -88,8 +88,6 @@ pipeline {
       steps {
         sh '''
           set -euo pipefail
-          helm repo add bitnami https://charts.bitnami.com/bitnami >/dev/null 2>&1 || true
-          helm repo add qdrant https://qdrant.github.io/qdrant-helm/ >/dev/null 2>&1 || true
           helm repo add istio https://istio-release.storage.googleapis.com/charts >/dev/null 2>&1 || true
           helm repo update
         '''
@@ -117,8 +115,8 @@ pipeline {
           fi
 
           # Leaf charts (no Chart.yaml "dependencies:") must not keep charts/*.tgz or
-          # Chart.lock from an old Bitnami subchart wrap — helm lint then errors with
-          # "chart metadata is missing these dependencies: mongodb".
+          # Chart.lock from an old subchart wrap — helm lint then errors with
+          # "chart metadata is missing these dependencies: <name>".
           prune_leaf_helm_chart() {
             local chart_dir="$1"
             local cf="${chart_dir}/Chart.yaml"
@@ -128,6 +126,8 @@ pipeline {
             fi
           }
           prune_leaf_helm_chart "${CHARTS_DIR}/mongodb"
+          prune_leaf_helm_chart "${CHARTS_DIR}/rabbitmq"
+          prune_leaf_helm_chart "${CHARTS_DIR}/qdrant"
           prune_leaf_helm_chart "${CHARTS_DIR}/always-open-istio"
 
           helm dependency build "${CHARTS_DIR}/mongodb"
@@ -198,6 +198,8 @@ pipeline {
               fi
             }
             prune_leaf_helm_chart "${CHARTS_DIR}/mongodb"
+            prune_leaf_helm_chart "${CHARTS_DIR}/rabbitmq"
+            prune_leaf_helm_chart "${CHARTS_DIR}/qdrant"
             prune_leaf_helm_chart "${CHARTS_DIR}/always-open-istio"
 
             aws sts get-caller-identity >/dev/null

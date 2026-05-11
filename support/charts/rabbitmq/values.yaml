@@ -1,16 +1,49 @@
-rabbitmq:
-  auth:
-    username: admin
-    password: password
-  replicaCount: 1
-  persistence:
-    enabled: false
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  service:
-    type: ClusterIP
+# Docker Official Image — https://hub.docker.com/_/rabbitmq
+image:
+  registry: docker.io
+  repository: library/rabbitmq
+  tag: 4.3-management
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# Stable service DNS (same as earlier chart: rabbitmq:5672)
+fullnameOverride: rabbitmq
+
+nameOverride: ""
+
+auth:
+  username: admin
+  password: password
+
+persistence:
+  enabled: false
+  size: 10Gi
+  storageClass: gp2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  amqpPort: 5672
+  managementPort: 15672
+
+# Official image runs as rabbitmq (typically 999:999); volumes need a matching fsGroup.
+podSecurityContext:
+  fsGroup: 999
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+
+volumePermissions:
+  enabled: false
+  image: busybox:1.36
+  uid: 999
+  gid: 999

@@ -1,4 +1,4 @@
-# Official MongoDB Community Server (not Bitnami)
+# Official MongoDB Community Server image (not a bundled subchart).
 # https://hub.docker.com/r/mongodb/mongodb-community-server
 image:
   registry: docker.io
@@ -8,7 +8,7 @@ image:
 
 replicaCount: 1
 
-# Stable Service / StatefulSet name (matches former Bitnami install DNS: mongodb:27017)
+# Stable Service / StatefulSet name (keep DNS name mongodb:27017).
 fullnameOverride: mongodb
 
 nameOverride: ""
@@ -39,7 +39,7 @@ service:
 
 # Official image runs as non-root (mongodb user / typically 999:999). Persistent volumes
 # from the cloud provider are often root-owned; fsGroup lets kubelet grant write access.
-# If you reused a Bitnami PVC (uid 1001), enable volumePermissions once to chown data.
+# If you reused an older PVC (e.g. different image UID), enable volumePermissions once to chown data.
 podSecurityContext:
   fsGroup: 999
   fsGroupChangePolicy: OnRootMismatch

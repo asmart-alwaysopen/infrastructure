@@ -1,17 +1,44 @@
-qdrant:
-  replicaCount: 1
-  persistent:
-    enabled: true
-    storageClass: gp2
-    accessModes:
-      - ReadWriteOnce
-    size: 10Gi
-  service:
-    type: ClusterIP
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
+# Official image — https://hub.docker.com/r/qdrant/qdrant
+image:
+  registry: docker.io
+  repository: qdrant/qdrant
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+fullnameOverride: qdrant
+
+nameOverride: ""
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: gp2
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  httpPort: 6333
+  grpcPort: 6334
+
+# Published images often run as UID 1000; fsGroup fixes PV permissions on many clusters.
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+
+volumePermissions:
+  enabled: false
+  image: busybox:1.36
+  uid: 1000
+  gid: 1000
