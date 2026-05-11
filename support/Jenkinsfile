@@ -17,6 +17,7 @@ pipeline {
     string(name: 'NAMESPACE_ISTIO', defaultValue: 'istio-system', description: 'Namespace for Istio control plane and ingress.')
     string(name: 'ISTIO_VERSION', defaultValue: '1.20.0', description: 'Istio Helm chart version.')
     string(name: 'DOMAIN_NAME', defaultValue: 'bealwaysopen.com', description: 'Domain used by always-open-istio chart.')
+    string(name: 'HELM_WAIT_TIMEOUT', defaultValue: '20m', description: 'Helm --wait timeout (e.g. 15m, 20m). Bitnami MongoDB often needs >5m on first boot.')
     booleanParam(name: 'REQUIRE_MANUAL_APPROVAL', defaultValue: false, description: 'When true, require approval before apply/destroy.')
   }
 
@@ -24,6 +25,7 @@ pipeline {
     SUPPORT_DIR = 'infrastructure/support'
     CHARTS_DIR  = 'infrastructure/support/charts'
     MANIFESTS_DIR = 'infrastructure/support/manifests/istio'
+    HELM_WAIT_TIMEOUT = "${params.HELM_WAIT_TIMEOUT}"
   }
 
   stages {
@@ -186,41 +188,48 @@ pipeline {
             helm upgrade --install mongodb "${CHARTS_DIR}/mongodb" \
               --namespace "${NAMESPACE_INFRA}" \
               --values "${CHARTS_DIR}/mongodb/values.yaml" \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             helm upgrade --install rabbitmq "${CHARTS_DIR}/rabbitmq" \
               --namespace "${NAMESPACE_INFRA}" \
               --values "${CHARTS_DIR}/rabbitmq/values.yaml" \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             helm upgrade --install qdrant "${CHARTS_DIR}/qdrant" \
               --namespace "${NAMESPACE_INFRA}" \
               --values "${CHARTS_DIR}/qdrant/values.yaml" \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             helm upgrade --install istio-base istio/base \
               --namespace "${NAMESPACE_ISTIO}" \
               --version "${ISTIO_VERSION}" \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             helm upgrade --install istiod istio/istiod \
               --namespace "${NAMESPACE_ISTIO}" \
               --version "${ISTIO_VERSION}" \
               --set global.proxy.resources.requests.cpu=50m \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             helm upgrade --install istio-ingress istio/gateway \
               --namespace "${NAMESPACE_ISTIO}" \
               --version "${ISTIO_VERSION}" \
               --set service.type=LoadBalancer \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             kubectl label namespace "${NAMESPACE_APP}" istio-injection=enabled --overwrite
 
             helm upgrade --install always-open-istio "${CHARTS_DIR}/always-open-istio" \
               --namespace "${NAMESPACE_APP}" \
               --set "domain=${DOMAIN_NAME}" \
-              --wait
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
 
             if [ -d "${MANIFESTS_DIR}" ]; then
               kubectl apply -f "${MANIFESTS_DIR}/" || true

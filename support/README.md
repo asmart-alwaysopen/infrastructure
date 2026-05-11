@@ -31,6 +31,7 @@ Use `infrastructure/support/Jenkinsfile`.
 - `NAMESPACE_ISTIO`: namespace for Istio control plane
 - `ISTIO_VERSION`: Istio Helm version
 - `DOMAIN_NAME`: domain passed to `always-open-istio` chart
+- `HELM_WAIT_TIMEOUT`: Helm `--wait` duration (default `20m`; MongoDB StatefulSet first boot often exceeds Helm’s ~5m default)
 - `REQUIRE_MANUAL_APPROVAL`: if true, pause before `apply`/`destroy`
 
 ### Destroy guard

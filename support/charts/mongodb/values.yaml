@@ -1,26 +1,43 @@
-mongodb:
-  architecture: standalone
-  auth:
-    enabled: true
-    rootUser: root
-    rootPassword: "DKiNy4dUqP%"
-    usernames:
-      - appuser
-    passwords:
-      - apppassword
-    databases:
-      - always_open_db
-  persistence:
-    enabled: true
-    size: 10Gi
-    # Must match an existing StorageClass on the cluster (e.g. EKS default gp2).
-    storageClass: gp2
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  service:
-    type: ClusterIP
+# Official MongoDB Community Server (not Bitnami)
+# https://hub.docker.com/r/mongodb/mongodb-community-server
+image:
+  registry: docker.io
+  repository: mongodb/mongodb-community-server
+  tag: 7.0-ubi9
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# Stable Service / StatefulSet name (matches former Bitnami install DNS: mongodb:27017)
+fullnameOverride: mongodb
+
+nameOverride: ""
+
+auth:
+  rootUsername: root
+  rootPassword: "DKiNy4dUqP%"
+  appUsername: appuser
+  appPassword: "apppassword"
+  appDatabase: always_open_db
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: gp2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+service:
+  type: ClusterIP
+  port: 27017
+
+podSecurityContext: {}
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
