@@ -17,7 +17,7 @@ pipeline {
     string(name: 'NAMESPACE_ISTIO', defaultValue: 'istio-system', description: 'Namespace for Istio control plane and ingress.')
     string(name: 'ISTIO_VERSION', defaultValue: '1.20.0', description: 'Istio Helm chart version.')
     string(name: 'DOMAIN_NAME', defaultValue: 'bealwaysopen.com', description: 'Domain used by always-open-istio chart.')
-    string(name: 'HELM_WAIT_TIMEOUT', defaultValue: '20m', description: 'Helm --wait timeout (e.g. 15m, 20m). Bitnami MongoDB often needs >5m on first boot.')
+    string(name: 'HELM_WAIT_TIMEOUT', defaultValue: '20m', description: 'Helm --wait timeout (e.g. 15m, 20m). MongoDB StatefulSet first boot often needs >5m.')
     booleanParam(name: 'REQUIRE_MANUAL_APPROVAL', defaultValue: false, description: 'When true, require approval before apply/destroy.')
   }
 
@@ -116,6 +116,20 @@ pipeline {
             fi
           fi
 
+          # Leaf charts (no Chart.yaml "dependencies:") must not keep charts/*.tgz or
+          # Chart.lock from an old Bitnami subchart wrap — helm lint then errors with
+          # "chart metadata is missing these dependencies: mongodb".
+          prune_leaf_helm_chart() {
+            local chart_dir="$1"
+            local cf="${chart_dir}/Chart.yaml"
+            [ -f "${cf}" ] || return 0
+            if ! grep -qE '^[[:space:]]*dependencies:' "${cf}"; then
+              rm -rf "${chart_dir}/charts" "${chart_dir}/Chart.lock"
+            fi
+          }
+          prune_leaf_helm_chart "${CHARTS_DIR}/mongodb"
+          prune_leaf_helm_chart "${CHARTS_DIR}/always-open-istio"
+
           helm dependency build "${CHARTS_DIR}/mongodb"
           helm dependency build "${CHARTS_DIR}/rabbitmq"
           helm dependency build "${CHARTS_DIR}/qdrant"
@@ -174,6 +188,17 @@ pipeline {
                 exit 1
               fi
             fi
+
+            prune_leaf_helm_chart() {
+              local chart_dir="$1"
+              local cf="${chart_dir}/Chart.yaml"
+              [ -f "${cf}" ] || return 0
+              if ! grep -qE '^[[:space:]]*dependencies:' "${cf}"; then
+                rm -rf "${chart_dir}/charts" "${chart_dir}/Chart.lock"
+              fi
+            }
+            prune_leaf_helm_chart "${CHARTS_DIR}/mongodb"
+            prune_leaf_helm_chart "${CHARTS_DIR}/always-open-istio"
 
             aws sts get-caller-identity >/dev/null
 
