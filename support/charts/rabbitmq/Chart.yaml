@@ -1,0 +1,12 @@
+apiVersion: v2
+name: rabbitmq
+version: 0.1.0
+description: Wrapper chart to deploy RabbitMQ via Bitnami chart
+
+type: application
+
+# We rely entirely on upstream templates
+dependencies:
+  - name: rabbitmq
+    version: "~15.0.0"
+    repository: "https://charts.bitnami.com/bitnami"

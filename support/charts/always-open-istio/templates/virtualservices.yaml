@@ -1,0 +1,130 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: api-virtual-service
+spec:
+  hosts:
+    - "api.{{ .Values.domain }}"
+  gateways:
+    - istio-system/always-open-gateway
+  http:
+    - match:
+        - uri:
+            exact: "/call/api/query-socket"
+      route:
+        - destination:
+            host: call-manager
+            port:
+              number: 3000
+
+    - match:
+        - uri:
+            prefix: "/api"
+        - uri:
+            prefix: "/admin"
+        - uri:
+            prefix: "/v1"
+        - uri:
+            prefix: "/auth"
+      route:
+        - destination:
+            host: {{ .Values.services.api.host }}
+            port:
+              number: {{ .Values.services.api.port }}
+    - match:
+        - uri:
+            prefix: "/chat"
+      route:
+        - destination:
+            host: chat-manager
+            port:
+              number: 3000
+    - match:
+        - uri:
+            prefix: "/call"
+      route:
+        - destination:
+            host: call-manager
+            port:
+              number: 3000
+    - match:
+        - uri:
+            prefix: "/knowledge"
+      route:
+        - destination:
+            host: knowledge-manager
+            port:
+              number: 8000
+    - match:
+        - uri:
+            prefix: "/billing"
+      route:
+        - destination:
+            host: billing-service
+            port:
+              number: 3000
+    - match:
+        - uri:
+            prefix: "/analysis"
+      route:
+        - destination:
+            host: analysis-service
+            port:
+              number: 3000
+    - match:
+        - uri:
+            prefix: "/token"
+      route:
+        - destination:
+            host: token-manager
+            port:
+              number: 8001
+    - match:
+        - uri:
+            prefix: "/webhook"
+      route:
+        - destination:
+            host: webhook-manager
+            port:
+              number: 3000
+    - match:
+        - uri:
+            prefix: "/agent"
+      route:
+        - destination:
+            host: agent-manager
+            port:
+              number: 8000
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: webapp-virtual-service
+spec:
+  hosts:
+    - "app.{{ .Values.domain }}"
+  gateways:
+    - istio-system/always-open-gateway
+  http:
+    - route:
+        - destination:
+            host: {{ .Values.services.webapp.host }}
+            port:
+              number: {{ .Values.services.webapp.port }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: website-virtual-service
+spec:
+  hosts:
+    - "{{ .Values.domain }}"
+    - "www.{{ .Values.domain }}"
+  gateways:
+    - istio-system/always-open-gateway
+  http:
+    - route:
+        - destination:
+            host: {{ .Values.services.website.host }}
+            port:
+              number: {{ .Values.services.website.port }}

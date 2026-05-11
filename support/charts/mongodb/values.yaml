@@ -1,0 +1,25 @@
+mongodb:
+  architecture: standalone
+  auth:
+    enabled: true
+    rootUser: root
+    rootPassword: "DKiNy4dUqP%"
+    usernames:
+      - appuser
+    passwords:
+      - apppassword
+    databases:
+      - always_open_db
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ebs-gp2-retain
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  service:
+    type: ClusterIP

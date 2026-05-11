@@ -21,7 +21,9 @@ pipeline {
   }
 
   environment {
-    DEPLOYMENT_DIR = ''
+    SUPPORT_DIR = ''
+    CHARTS_DIR  = ''
+    MANIFESTS_DIR = ''
   }
 
   stages {
@@ -34,14 +36,16 @@ pipeline {
     stage('Resolve Paths') {
       steps {
         script {
-          if (fileExists('deployment/helm/mongodb/Chart.yaml')) {
-            env.DEPLOYMENT_DIR = 'deployment'
-          } else if (fileExists('../deployment/helm/mongodb/Chart.yaml')) {
-            env.DEPLOYMENT_DIR = '../deployment'
+          if (fileExists('infrastructure/support/charts/mongodb/Chart.yaml')) {
+            env.SUPPORT_DIR = 'infrastructure/support'
+          } else if (fileExists('support/charts/mongodb/Chart.yaml')) {
+            env.SUPPORT_DIR = 'support'
           } else {
-            error('Could not find deployment directory. Expected deployment/helm/mongodb/Chart.yaml in workspace.')
+            error('Could not find support charts. Expected infrastructure/support/charts/mongodb/Chart.yaml or support/charts/mongodb/Chart.yaml in workspace.')
           }
-          echo "Using deployment directory: ${env.DEPLOYMENT_DIR}"
+          env.CHARTS_DIR = "${env.SUPPORT_DIR}/charts"
+          env.MANIFESTS_DIR = "${env.SUPPORT_DIR}/manifests/istio"
+          echo "Using support directory: ${env.SUPPORT_DIR}"
         }
       }
     }
@@ -96,28 +100,28 @@ pipeline {
         sh '''
           set -euo pipefail
 
-          helm dependency build "${DEPLOYMENT_DIR}/helm/mongodb"
-          helm dependency build "${DEPLOYMENT_DIR}/helm/rabbitmq"
-          helm dependency build "${DEPLOYMENT_DIR}/helm/qdrant"
+          helm dependency build "${CHARTS_DIR}/mongodb"
+          helm dependency build "${CHARTS_DIR}/rabbitmq"
+          helm dependency build "${CHARTS_DIR}/qdrant"
 
-          helm lint "${DEPLOYMENT_DIR}/helm/mongodb" --values "${DEPLOYMENT_DIR}/helm/mongodb/values.yaml"
-          helm lint "${DEPLOYMENT_DIR}/helm/rabbitmq" --values "${DEPLOYMENT_DIR}/helm/rabbitmq/values.yaml"
-          helm lint "${DEPLOYMENT_DIR}/helm/qdrant" --values "${DEPLOYMENT_DIR}/helm/qdrant/values.yaml"
-          helm lint "${DEPLOYMENT_DIR}/helm/always-open-istio" --values "${DEPLOYMENT_DIR}/helm/always-open-istio/values.yaml"
+          helm lint "${CHARTS_DIR}/mongodb" --values "${CHARTS_DIR}/mongodb/values.yaml"
+          helm lint "${CHARTS_DIR}/rabbitmq" --values "${CHARTS_DIR}/rabbitmq/values.yaml"
+          helm lint "${CHARTS_DIR}/qdrant" --values "${CHARTS_DIR}/qdrant/values.yaml"
+          helm lint "${CHARTS_DIR}/always-open-istio" --values "${CHARTS_DIR}/always-open-istio/values.yaml"
 
-          helm template mongodb "${DEPLOYMENT_DIR}/helm/mongodb" \
+          helm template mongodb "${CHARTS_DIR}/mongodb" \
             --namespace "${NAMESPACE_INFRA}" \
-            --values "${DEPLOYMENT_DIR}/helm/mongodb/values.yaml" >/dev/null
+            --values "${CHARTS_DIR}/mongodb/values.yaml" >/dev/null
 
-          helm template rabbitmq "${DEPLOYMENT_DIR}/helm/rabbitmq" \
+          helm template rabbitmq "${CHARTS_DIR}/rabbitmq" \
             --namespace "${NAMESPACE_INFRA}" \
-            --values "${DEPLOYMENT_DIR}/helm/rabbitmq/values.yaml" >/dev/null
+            --values "${CHARTS_DIR}/rabbitmq/values.yaml" >/dev/null
 
-          helm template qdrant "${DEPLOYMENT_DIR}/helm/qdrant" \
+          helm template qdrant "${CHARTS_DIR}/qdrant" \
             --namespace "${NAMESPACE_INFRA}" \
-            --values "${DEPLOYMENT_DIR}/helm/qdrant/values.yaml" >/dev/null
+            --values "${CHARTS_DIR}/qdrant/values.yaml" >/dev/null
 
-          helm template always-open-istio "${DEPLOYMENT_DIR}/helm/always-open-istio" \
+          helm template always-open-istio "${CHARTS_DIR}/always-open-istio" \
             --namespace "${NAMESPACE_APP}" \
             --set "domain=${DOMAIN_NAME}" >/dev/null
         '''
@@ -141,23 +145,23 @@ pipeline {
           kubectl create namespace "${NAMESPACE_APP}" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create namespace "${NAMESPACE_ISTIO}" --dry-run=client -o yaml | kubectl apply -f -
 
-          helm dependency build "${DEPLOYMENT_DIR}/helm/mongodb"
-          helm dependency build "${DEPLOYMENT_DIR}/helm/rabbitmq"
-          helm dependency build "${DEPLOYMENT_DIR}/helm/qdrant"
+          helm dependency build "${CHARTS_DIR}/mongodb"
+          helm dependency build "${CHARTS_DIR}/rabbitmq"
+          helm dependency build "${CHARTS_DIR}/qdrant"
 
-          helm upgrade --install mongodb "${DEPLOYMENT_DIR}/helm/mongodb" \
+          helm upgrade --install mongodb "${CHARTS_DIR}/mongodb" \
             --namespace "${NAMESPACE_INFRA}" \
-            --values "${DEPLOYMENT_DIR}/helm/mongodb/values.yaml" \
+            --values "${CHARTS_DIR}/mongodb/values.yaml" \
             --wait
 
-          helm upgrade --install rabbitmq "${DEPLOYMENT_DIR}/helm/rabbitmq" \
+          helm upgrade --install rabbitmq "${CHARTS_DIR}/rabbitmq" \
             --namespace "${NAMESPACE_INFRA}" \
-            --values "${DEPLOYMENT_DIR}/helm/rabbitmq/values.yaml" \
+            --values "${CHARTS_DIR}/rabbitmq/values.yaml" \
             --wait
 
-          helm upgrade --install qdrant "${DEPLOYMENT_DIR}/helm/qdrant" \
+          helm upgrade --install qdrant "${CHARTS_DIR}/qdrant" \
             --namespace "${NAMESPACE_INFRA}" \
-            --values "${DEPLOYMENT_DIR}/helm/qdrant/values.yaml" \
+            --values "${CHARTS_DIR}/qdrant/values.yaml" \
             --wait
 
           helm upgrade --install istio-base istio/base \
@@ -179,13 +183,13 @@ pipeline {
 
           kubectl label namespace "${NAMESPACE_APP}" istio-injection=enabled --overwrite
 
-          helm upgrade --install always-open-istio "${DEPLOYMENT_DIR}/helm/always-open-istio" \
+          helm upgrade --install always-open-istio "${CHARTS_DIR}/always-open-istio" \
             --namespace "${NAMESPACE_APP}" \
             --set "domain=${DOMAIN_NAME}" \
             --wait
 
-          if [ -d "${DEPLOYMENT_DIR}/istio-manifests" ]; then
-            kubectl apply -f "${DEPLOYMENT_DIR}/istio-manifests/" || true
+          if [ -d "${MANIFESTS_DIR}" ]; then
+            kubectl apply -f "${MANIFESTS_DIR}/" || true
           fi
 
           kubectl wait --for=condition=available deployment/istiod -n "${NAMESPACE_ISTIO}" --timeout=300s

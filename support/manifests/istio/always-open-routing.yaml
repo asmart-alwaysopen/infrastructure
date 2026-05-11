@@ -1,0 +1,108 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: always-open-routing
+  namespace: always-open
+spec:
+  hosts:
+    - "*.bealwaysopen.com"
+    - "bealwaysopen.com"
+  gateways:
+    - istio-system/always-open-gateway
+  http:
+    # API Service
+    - match:
+        - uri:
+            prefix: "/api"
+      route:
+        - destination:
+            host: api-service
+            port:
+              number: 3000
+    
+    # Call Manager - /call/start -> /start
+    - match:
+        - uri:
+            prefix: "/call"
+      route:
+        - destination:
+            host: call-manager
+            port:
+              number: 3000
+    
+    # Chat Manager - /chat/message -> /message
+    - match:
+        - uri:
+            prefix: "/chat"
+      route:
+        - destination:
+            host: chat-manager
+            port:
+              number: 3000
+    
+    # Knowledge Manager - /knowledge/search -> /search
+    - match:
+        - uri:
+            prefix: "/knowledge"
+      route:
+        - destination:
+            host: knowledge-manager
+            port:
+              number: 8000
+    
+    # Billing Service - /billing/invoice -> /invoice
+    - match:
+        - uri:
+            prefix: "/billing"
+      route:
+        - destination:
+            host: billing-service
+            port:
+              number: 3000
+    
+    # Analysis Service - /analysis/process -> /process
+    - match:
+        - uri:
+            prefix: "/analysis"
+      route:
+        - destination:
+            host: analysis-service
+            port:
+              number: 3000
+    
+    # Token Manager - /token/validate -> /validate
+    - match:
+        - uri:
+            prefix: "/token"
+      route:
+        - destination:
+            host: token-manager
+            port:
+              number: 8001
+    
+    # Webhook Manager - /webhook/receive -> /receive
+    - match:
+        - uri:
+            prefix: "/webhook"
+      route:
+        - destination:
+            host: webhook-manager
+            port:
+              number: 3000
+    
+    # Agent Manager - /agent/status -> /status
+    - match:
+        - uri:
+            prefix: "/agent"
+      route:
+        - destination:
+            host: agent-manager
+            port:
+              number: 8000
+    
+    # Webapp - handles everything else (no rewriting)
+    - route:
+        - destination:
+            host: always-open-webapp
+            port:
+              number: 80

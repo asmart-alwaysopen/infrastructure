@@ -1,0 +1,4 @@
+apiVersion: v2
+name: always-open-istio
+version: 0.1.0
+description: Istio Gateway and VirtualServices for Always-Open

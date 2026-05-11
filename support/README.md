@@ -6,11 +6,12 @@ This folder contains a Jenkins pipeline for deploying shared Kubernetes support 
 
 The pipeline deploys only shared support components already used in this repository:
 
-- `deployment/helm/mongodb`
-- `deployment/helm/rabbitmq`
-- `deployment/helm/qdrant`
+- `infrastructure/support/charts/mongodb`
+- `infrastructure/support/charts/rabbitmq`
+- `infrastructure/support/charts/qdrant`
 - Istio control plane and ingress (`istio/base`, `istio/istiod`, `istio/gateway`)
-- `deployment/helm/always-open-istio`
+- `infrastructure/support/charts/always-open-istio`
+- `infrastructure/support/manifests/istio`
 
 Secrets are intentionally **not** managed by this pipeline.
 
@@ -39,4 +40,4 @@ Use `infrastructure/support/Jenkinsfile`.
 ## Notes
 
 - This pipeline is intentionally separated from `infrastructure/Jenkinsfile` (Terraform/EKS provisioning).
-- Existing `envoy` manifests can be used as reference for Istio routes/policies; this pipeline deploys Istio resources using the existing charts/manifests in `deployment`.
+- Existing `envoy` manifests can be used as reference for Istio routes/policies; this pipeline deploys Istio resources using charts/manifests stored under `infrastructure/support`.
