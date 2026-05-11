@@ -230,6 +230,11 @@ pipeline {
               --wait \
               --timeout "${HELM_WAIT_TIMEOUT}"
 
+            # istiod (pilot-discovery) mutates istiod-default-validator webhooks (e.g. failurePolicy)
+            # after install. Re-applying istio-base then hits Helm SSA conflicts unless we remove the
+            # object so the chart can recreate it; istiod reconciles again on the next upgrade.
+            kubectl delete validatingwebhookconfiguration istiod-default-validator --ignore-not-found=true
+
             helm upgrade --install istio-base istio/base \
               --namespace "${NAMESPACE_ISTIO}" \
               --version "${ISTIO_VERSION}" \
