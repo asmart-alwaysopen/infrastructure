@@ -88,6 +88,12 @@ module "eks" {
     min_size       = var.managed_node_group_defaults.min_size
     max_size       = var.managed_node_group_defaults.max_size
     desired_size   = var.managed_node_group_defaults.desired_size
+
+    # Required for admission webhooks (API server → workloads on nodes). Without the
+    # EKS cluster primary security group on node ENIs, mutating webhooks such as
+    # Istio sidecar injection often hit context deadline exceeded. See:
+    # https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html
+    attach_cluster_primary_security_group = true
   }
 
   eks_managed_node_groups = local.resolved_managed_node_groups

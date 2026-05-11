@@ -41,6 +41,7 @@ Set `enable_ebs_csi_driver = false` in `terraform.tfvars` if you install the dri
 
 - Set your AWS credentials/profile before running Terraform.
 - This stack intentionally starts focused on EKS. Additional services (datastores, DNS, certs, secrets, etc.) can be layered in incrementally.
+- Managed node groups set **`attach_cluster_primary_security_group = true`** so worker ENIs include the EKS cluster primary security group. That matches AWS guidance and avoids admission webhook timeouts (e.g. Istio `/inject`) when nothing else has customized security groups.
 
 ## Jenkins CI/CD
 
