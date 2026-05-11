@@ -21,9 +21,9 @@ pipeline {
   }
 
   environment {
-    SUPPORT_DIR = ''
-    CHARTS_DIR  = ''
-    MANIFESTS_DIR = ''
+    SUPPORT_DIR = 'infrastructure/support'
+    CHARTS_DIR  = 'infrastructure/support/charts'
+    MANIFESTS_DIR = 'infrastructure/support/manifests/istio'
   }
 
   stages {
@@ -73,6 +73,8 @@ pipeline {
         ]]) {
           sh '''
             set -euo pipefail
+            : "${CHARTS_DIR:=infrastructure/support/charts}"
+            : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
             aws eks update-kubeconfig --region "${AWS_REGION}" --name "${CLUSTER_NAME}"
             kubectl cluster-info
           '''
@@ -99,6 +101,18 @@ pipeline {
       steps {
         sh '''
           set -euo pipefail
+          : "${CHARTS_DIR:=infrastructure/support/charts}"
+          : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
+
+          if [ ! -d "${CHARTS_DIR}" ]; then
+            if [ -d "support/charts" ]; then
+              CHARTS_DIR="support/charts"
+              MANIFESTS_DIR="support/manifests/istio"
+            else
+              echo "Support charts directory not found: ${CHARTS_DIR}" >&2
+              exit 1
+            fi
+          fi
 
           helm dependency build "${CHARTS_DIR}/mongodb"
           helm dependency build "${CHARTS_DIR}/rabbitmq"
@@ -140,6 +154,18 @@ pipeline {
         }
         sh '''
           set -euo pipefail
+          : "${CHARTS_DIR:=infrastructure/support/charts}"
+          : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
+
+          if [ ! -d "${CHARTS_DIR}" ]; then
+            if [ -d "support/charts" ]; then
+              CHARTS_DIR="support/charts"
+              MANIFESTS_DIR="support/manifests/istio"
+            else
+              echo "Support charts directory not found: ${CHARTS_DIR}" >&2
+              exit 1
+            fi
+          fi
 
           kubectl create namespace "${NAMESPACE_INFRA}" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create namespace "${NAMESPACE_APP}" --dry-run=client -o yaml | kubectl apply -f -
@@ -209,6 +235,8 @@ pipeline {
         }
         sh '''
           set -euo pipefail
+          : "${CHARTS_DIR:=infrastructure/support/charts}"
+          : "${MANIFESTS_DIR:=infrastructure/support/manifests/istio}"
 
           helm uninstall always-open-istio --namespace "${NAMESPACE_APP}" || true
           helm uninstall istio-ingress --namespace "${NAMESPACE_ISTIO}" || true
