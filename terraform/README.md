@@ -7,6 +7,9 @@ It currently provisions:
 - EKS cluster on Kubernetes `1.35`
 - EKS managed node groups
 - Core EKS addons (`coredns`, `kube-proxy`, `vpc-cni`, `eks-pod-identity-agent`)
+- **Amazon EBS CSI driver** (`aws-ebs-csi-driver`) with IRSA, so `gp2` / CSI-backed PVCs can bind
+
+Set `enable_ebs_csi_driver = false` in `terraform.tfvars` if you install the driver outside Terraform.
 
 ## Usage
 
