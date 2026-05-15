@@ -128,15 +128,18 @@ pipeline {
           prune_leaf_helm_chart "${CHARTS_DIR}/mongodb"
           prune_leaf_helm_chart "${CHARTS_DIR}/rabbitmq"
           prune_leaf_helm_chart "${CHARTS_DIR}/qdrant"
+          prune_leaf_helm_chart "${CHARTS_DIR}/redis"
           prune_leaf_helm_chart "${CHARTS_DIR}/always-open-istio"
 
           helm dependency build "${CHARTS_DIR}/mongodb"
           helm dependency build "${CHARTS_DIR}/rabbitmq"
           helm dependency build "${CHARTS_DIR}/qdrant"
+          helm dependency build "${CHARTS_DIR}/redis"
 
           helm lint "${CHARTS_DIR}/mongodb" --values "${CHARTS_DIR}/mongodb/values.yaml"
           helm lint "${CHARTS_DIR}/rabbitmq" --values "${CHARTS_DIR}/rabbitmq/values.yaml"
           helm lint "${CHARTS_DIR}/qdrant" --values "${CHARTS_DIR}/qdrant/values.yaml"
+          helm lint "${CHARTS_DIR}/redis" --values "${CHARTS_DIR}/redis/values.yaml"
           helm lint "${CHARTS_DIR}/always-open-istio" --values "${CHARTS_DIR}/always-open-istio/values.yaml"
 
           helm template mongodb "${CHARTS_DIR}/mongodb" \
@@ -150,6 +153,10 @@ pipeline {
           helm template qdrant "${CHARTS_DIR}/qdrant" \
             --namespace "${NAMESPACE_INFRA}" \
             --values "${CHARTS_DIR}/qdrant/values.yaml" >/dev/null
+
+          helm template redis "${CHARTS_DIR}/redis" \
+            --namespace "${NAMESPACE_INFRA}" \
+            --values "${CHARTS_DIR}/redis/values.yaml" >/dev/null
 
           helm template always-open-istio "${CHARTS_DIR}/always-open-istio" \
             --namespace "${NAMESPACE_APP}" \
@@ -200,6 +207,7 @@ pipeline {
             prune_leaf_helm_chart "${CHARTS_DIR}/mongodb"
             prune_leaf_helm_chart "${CHARTS_DIR}/rabbitmq"
             prune_leaf_helm_chart "${CHARTS_DIR}/qdrant"
+            prune_leaf_helm_chart "${CHARTS_DIR}/redis"
             prune_leaf_helm_chart "${CHARTS_DIR}/always-open-istio"
 
             aws sts get-caller-identity >/dev/null
@@ -211,6 +219,7 @@ pipeline {
             helm dependency build "${CHARTS_DIR}/mongodb"
             helm dependency build "${CHARTS_DIR}/rabbitmq"
             helm dependency build "${CHARTS_DIR}/qdrant"
+            helm dependency build "${CHARTS_DIR}/redis"
 
             helm upgrade --install mongodb "${CHARTS_DIR}/mongodb" \
               --namespace "${NAMESPACE_INFRA}" \
@@ -227,6 +236,12 @@ pipeline {
             helm upgrade --install qdrant "${CHARTS_DIR}/qdrant" \
               --namespace "${NAMESPACE_INFRA}" \
               --values "${CHARTS_DIR}/qdrant/values.yaml" \
+              --wait \
+              --timeout "${HELM_WAIT_TIMEOUT}"
+
+            helm upgrade --install redis "${CHARTS_DIR}/redis" \
+              --namespace "${NAMESPACE_INFRA}" \
+              --values "${CHARTS_DIR}/redis/values.yaml" \
               --wait \
               --timeout "${HELM_WAIT_TIMEOUT}"
 
@@ -301,6 +316,7 @@ pipeline {
             helm uninstall istiod --namespace "${NAMESPACE_ISTIO}" || true
             helm uninstall istio-base --namespace "${NAMESPACE_ISTIO}" || true
 
+            helm uninstall redis --namespace "${NAMESPACE_INFRA}" || true
             helm uninstall qdrant --namespace "${NAMESPACE_INFRA}" || true
             helm uninstall rabbitmq --namespace "${NAMESPACE_INFRA}" || true
             helm uninstall mongodb --namespace "${NAMESPACE_INFRA}" || true

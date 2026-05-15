@@ -1,0 +1,39 @@
+# Docker Official Image — https://hub.docker.com/_/redis
+image:
+  registry: docker.io
+  repository: library/redis
+  tag: 7-alpine
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+fullnameOverride: redis
+nameOverride: ""
+
+auth:
+  enabled: false
+  password: ""
+
+persistence:
+  enabled: false
+  size: 5Gi
+  storageClass: gp2
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+service:
+  type: ClusterIP
+  port: 6379
+
+podSecurityContext:
+  fsGroup: 999
+  fsGroupChangePolicy: OnRootMismatch
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
