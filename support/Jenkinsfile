@@ -17,6 +17,9 @@ pipeline {
     string(name: 'NAMESPACE_ISTIO', defaultValue: 'istio-system', description: 'Namespace for Istio control plane and ingress.')
     string(name: 'ISTIO_VERSION', defaultValue: '1.20.0', description: 'Istio Helm chart version.')
     string(name: 'DOMAIN_NAME', defaultValue: 'bealwaysopen.com', description: 'Domain used by always-open-istio chart.')
+    string(name: 'API_HOST', defaultValue: 'dev.api.bealwaysopen.ai', description: 'Public hostname for backend API routing (VirtualService).')
+    string(name: 'APP_HOST', defaultValue: 'dev.app.bealwaysopen.ai', description: 'Public hostname for webapp routing (VirtualService).')
+    string(name: 'ACM_CERT_ARN', defaultValue: '', description: 'ACM certificate ARN (us-west-2) for TLS termination on the istio-ingress NLB. Leave empty to skip TLS annotations.')
     string(name: 'HELM_WAIT_TIMEOUT', defaultValue: '20m', description: 'Helm --wait timeout (e.g. 15m, 20m). MongoDB StatefulSet first boot often needs >5m.')
     booleanParam(name: 'REQUIRE_MANUAL_APPROVAL', defaultValue: false, description: 'When true, require approval before apply/destroy.')
   }
@@ -160,7 +163,8 @@ pipeline {
 
           helm template always-open-istio "${CHARTS_DIR}/always-open-istio" \
             --namespace "${NAMESPACE_APP}" \
-            --set "domain=${DOMAIN_NAME}" >/dev/null
+            --set "hosts.api=${API_HOST}" \
+            --set "hosts.app=${APP_HOST}" >/dev/null
         '''
       }
     }
@@ -263,10 +267,23 @@ pipeline {
               --wait \
               --timeout "${HELM_WAIT_TIMEOUT}"
 
+            ISTIO_INGRESS_SET_ARGS=(
+              --set service.type=LoadBalancer
+              --set 'service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-type=nlb'
+              --set 'service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-backend-protocol=tcp'
+            )
+            if [ -n "${ACM_CERT_ARN:-}" ]; then
+              ISTIO_INGRESS_SET_ARGS+=(
+                --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-ssl-cert=${ACM_CERT_ARN}"
+                --set 'service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-ssl-ports=https'
+                --set 'service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-ssl-negotiation-policy=ELBSecurityPolicy-TLS13-1-2-2021-06'
+              )
+            fi
+
             helm upgrade --install istio-ingress istio/gateway \
               --namespace "${NAMESPACE_ISTIO}" \
               --version "${ISTIO_VERSION}" \
-              --set service.type=LoadBalancer \
+              "${ISTIO_INGRESS_SET_ARGS[@]}" \
               --wait \
               --timeout "${HELM_WAIT_TIMEOUT}"
 
@@ -274,7 +291,8 @@ pipeline {
 
             helm upgrade --install always-open-istio "${CHARTS_DIR}/always-open-istio" \
               --namespace "${NAMESPACE_APP}" \
-              --set "domain=${DOMAIN_NAME}" \
+              --set "hosts.api=${API_HOST}" \
+              --set "hosts.app=${APP_HOST}" \
               --wait \
               --timeout "${HELM_WAIT_TIMEOUT}"
 

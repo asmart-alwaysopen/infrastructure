@@ -1,53 +1,58 @@
-domain: bealwaysopen.com
+namespaces:
+  app: always-open
+  istio: istio-system
 
-services:
-  api:
-    host: api-service
-    port: 3000
-  webapp:
+hosts:
+  api: dev.api.bealwaysopen.ai
+  app: dev.app.bealwaysopen.ai
+
+gateway:
+  name: always-open-gateway
+  selector:
+    istio: ingress
+  tls:
+    enabled: false
+    credentialName: always-open-tls
+
+apiVirtualService:
+  name: always-open-api-routing
+  routes:
+    - prefix: /api
+      host: api-service
+      port: 3000
+    - prefix: /call
+      host: call-manager
+      port: 3000
+    - prefix: /chat
+      host: chat-manager
+      port: 3000
+    - prefix: /knowledge
+      host: knowledge-manager
+      port: 8000
+    - prefix: /billing
+      host: billing-service
+      port: 3000
+    - prefix: /analysis
+      host: analysis-service
+      port: 3000
+    - prefix: /token
+      host: token-manager
+      port: 3004
+    - prefix: /webhook
+      host: webhook-manager
+      port: 3000
+    - prefix: /integrations/crm
+      host: ghl-adapter
+      port: 3000
+    - prefix: /scheduler
+      host: call-scheduler
+      port: 3000
+    - prefix: /agent
+      host: agent-manager
+      port: 8000
+
+appVirtualService:
+  name: always-open-app-routing
+  destination:
     host: always-open-webapp
     port: 80
-  website:
-    host: always-open-webapp
-    port: 80
-
-mtls:
-  enabled: true
-
-# List internal services that should use ISTIO_MUTUAL when called within the mesh
-internalServices:
-  api-service:
-    host: api-service
-  call-manager:
-    host: call-manager
-  chat-manager:
-    host: chat-manager
-  knowledge-manager:
-    host: knowledge-manager
-  billing-service:
-    host: billing-service
-  analysis-service:
-    host: analysis-service
-  token-manager:
-    host: token-manager
-  webhook-manager:
-    host: webhook-manager
-  agent-manager:
-    host: agent-manager
-
-authz:
-  enabled: true
-  onlyAuthenticated: true
-  # Allow calls from agent-manager service accounts that live in tenant namespaces
-  allowAgentManagerFromAnyNamespace: true
-  agentManagerServiceAccountName: default
-  # Pattern for tenant namespaces (used in principal match); set to "*" to allow from any namespace
-  tenantNamespacePattern: "tenant-*"
-  # Optionally list explicit tenant namespaces to allow (in addition to the pattern)
-  tenantNamespaces: []
-
-kyverno:
-  enableTenantNamespaceInjection: false
-  # If using Istio revisioned control plane, set useIstioRevisionLabel true and provide revision
-  useIstioRevisionLabel: false
-  istioRevision: default

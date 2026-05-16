@@ -1,4 +1,6 @@
 apiVersion: v2
 name: always-open-istio
+description: Istio Gateway and VirtualService routing for the always-open application stack.
+type: application
 version: 0.1.0
-description: Istio Gateway and VirtualServices for Always-Open
+appVersion: "1.0.0"
