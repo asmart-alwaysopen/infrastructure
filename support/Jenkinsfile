@@ -29,6 +29,16 @@ pipeline {
     CHARTS_DIR  = 'infrastructure/support/charts'
     MANIFESTS_DIR = 'infrastructure/support/manifests/istio'
     HELM_WAIT_TIMEOUT = "${params.HELM_WAIT_TIMEOUT}"
+    API_HOST = "${params.API_HOST}"
+    APP_HOST = "${params.APP_HOST}"
+    ACM_CERT_ARN = "${params.ACM_CERT_ARN}"
+    DOMAIN_NAME = "${params.DOMAIN_NAME}"
+    AWS_REGION = "${params.AWS_REGION}"
+    CLUSTER_NAME = "${params.CLUSTER_NAME}"
+    NAMESPACE_INFRA = "${params.NAMESPACE_INFRA}"
+    NAMESPACE_APP = "${params.NAMESPACE_APP}"
+    NAMESPACE_ISTIO = "${params.NAMESPACE_ISTIO}"
+    ISTIO_VERSION = "${params.ISTIO_VERSION}"
   }
 
   stages {
@@ -277,7 +287,22 @@ pipeline {
                 --set "service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-ssl-cert=${ACM_CERT_ARN}"
                 --set 'service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-ssl-ports=https'
                 --set 'service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-ssl-negotiation-policy=ELBSecurityPolicy-TLS13-1-2-2021-06'
+                # NLB terminates TLS and forwards plain TCP, so the https service port must
+                # target the istio-ingress HTTP listener (:80), not :443.
+                --set service.ports[2].targetPort=80
               )
+            fi
+
+            # Migrate from Classic ELB to NLB if the existing Service was a non-NLB
+            # LoadBalancer. The in-tree cloud controller will not migrate in-place when the
+            # aws-load-balancer-type annotation changes, so we delete the Service and let
+            # Helm recreate it. The NLB is then provisioned fresh on the next upgrade.
+            EXISTING_LB_TYPE="$(kubectl -n "${NAMESPACE_ISTIO}" get svc istio-ingress -o jsonpath='{.metadata.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-type}' 2>/dev/null || true)"
+            if [ -n "${EXISTING_LB_TYPE:-}" ] || ! kubectl -n "${NAMESPACE_ISTIO}" get svc istio-ingress >/dev/null 2>&1; then
+              : # already NLB or service does not exist
+            else
+              echo "Existing istio-ingress Service is a Classic ELB. Deleting so Helm can recreate it as an NLB..."
+              kubectl -n "${NAMESPACE_ISTIO}" delete svc istio-ingress --ignore-not-found=true
             fi
 
             helm upgrade --install istio-ingress istio/gateway \
