@@ -73,7 +73,7 @@ variable "managed_node_group_defaults" {
     ami_type       = "AL2023_x86_64_STANDARD"
     instance_types = ["m6i.large"]
     capacity_type  = "ON_DEMAND"
-    disk_size      = 50
+    disk_size      = 30
     min_size       = 2
     max_size       = 6
     desired_size   = 3
