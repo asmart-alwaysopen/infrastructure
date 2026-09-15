@@ -42,7 +42,7 @@ Set `enable_ebs_csi_driver = false` in `terraform.tfvars` if you install the dri
 - Set your AWS credentials/profile before running Terraform.
 - This stack intentionally starts focused on EKS. Additional services (datastores, DNS, certs, secrets, etc.) can be layered in incrementally.
 - Managed node groups set **`attach_cluster_primary_security_group = true`** so worker ENIs include the EKS cluster primary security group. That matches AWS guidance and avoids admission webhook timeouts (e.g. Istio `/inject`) when nothing else has customized security groups.
-- Root volume size is **`30` Gi gp3**, set on the node-group launch template (`block_device_mappings`). The EKS `disk_size` field is ignored when a custom launch template is used; without the mapping, new nodes come up at the 20 Gi default and cannot pull the knowledge-manager image.
+- Root volume size is **`50` Gi gp3**, set on the node-group launch template (`block_device_mappings`). The EKS `disk_size` field is ignored when a custom launch template is used; without the mapping, new nodes come up at the 20 Gi default and cannot pull the knowledge-manager image.
 - Node roles attach **`AmazonSSMManagedInstanceCore`** so instances register with Systems Manager (`ssm send-command` / Session Manager).
 
 ## Jenkins CI/CD
