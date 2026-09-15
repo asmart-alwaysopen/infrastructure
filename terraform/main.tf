@@ -23,6 +23,23 @@ locals {
       desired_size   = coalesce(try(ng.desired_size, null), var.managed_node_group_defaults.desired_size)
       labels         = coalesce(try(ng.labels, null), {})
       taints         = coalesce(try(ng.taints, null), [])
+
+      # terraform-aws-modules/eks always builds a custom launch template for
+      # managed node groups. EKS ignores node-group disk_size in that case, so
+      # the root volume must be set on the launch template or new nodes come
+      # up at the 20 Gi EKS default (too small for knowledge-manager).
+      block_device_mappings = {
+        xvda = {
+          device_name = "/dev/xvda"
+          ebs = {
+            volume_size           = coalesce(try(ng.disk_size, null), var.managed_node_group_defaults.disk_size)
+            volume_type           = "gp3"
+            iops                  = 3000
+            throughput            = 125
+            delete_on_termination = true
+          }
+        }
+      }
     }
   }
 }
@@ -94,6 +111,10 @@ module "eks" {
     # Istio sidecar injection often hit context deadline exceeded. See:
     # https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html
     attach_cluster_primary_security_group = true
+
+    iam_role_additional_policies = {
+      AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    }
   }
 
   eks_managed_node_groups = local.resolved_managed_node_groups
